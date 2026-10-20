@@ -55,6 +55,7 @@ class HuffmanCompressorApp(ctk.CTk):
         self.geometry("1080x760")
         self.minsize(900, 640)
         self.selected_files: list[Path] = []
+        self.output_directory: Path | None = None
         self.last_analysis = None
         self._build_ui()
 
@@ -128,6 +129,22 @@ class HuffmanCompressorApp(ctk.CTk):
                       command=self._verify_dialog, fg_color="#454B57",
                       hover_color="#343943").grid(
             row=6, column=0, columnspan=2, padx=14, pady=10, sticky="ew")
+
+        output_frame = ctk.CTkFrame(tab, corner_radius=10)
+        output_frame.grid(row=7, column=0, columnspan=2, padx=14, pady=(16, 8), sticky="ew")
+        output_frame.grid_columnconfigure(0, weight=1)
+        self.output_label = ctk.CTkLabel(
+            output_frame, text="Output folder: Same folder as each input file",
+            anchor="w", wraplength=700
+        )
+        self.output_label.grid(row=0, column=0, padx=12, pady=10, sticky="ew")
+        ctk.CTkButton(output_frame, text="Choose output folder…",
+                      command=self._choose_output_folder, width=180).grid(
+            row=0, column=1, padx=6, pady=8)
+        ctk.CTkButton(output_frame, text="Use input folder",
+                      command=self._reset_output_folder, width=130,
+                      fg_color="#454B57", hover_color="#343943").grid(
+            row=0, column=2, padx=(6, 12), pady=8)
 
     def _build_analysis(self):
         tab = self.analysis_tab
@@ -222,11 +239,11 @@ class HuffmanCompressorApp(ctk.CTk):
         for index, source in enumerate(files, start=1):
             try:
                 if operation == "compress":
-                    output = default_compressed_path(source)
+                    output = self._output_path_for(source, operation)
                     stats, codes, root = compress_file(source, output)
                     outcomes.append((True, source, output, stats, codes, root, None))
                 else:
-                    output = default_decompressed_path(source)
+                    output = self._output_path_for(source, operation)
                     stats = decompress_file(source, output)
                     outcomes.append((True, source, output, stats, None, None, None))
             except Exception as exc:
@@ -289,6 +306,29 @@ class HuffmanCompressorApp(ctk.CTk):
             self.status.configure(text=f"Analysis built for {source.name}.")
         except Exception as exc:
             messagebox.showerror("Analysis error", str(exc))
+
+    def _choose_output_folder(self):
+        folder = filedialog.askdirectory(title="Choose output folder")
+        if not folder:
+            return
+        self.output_directory = Path(folder)
+        self.output_label.configure(text=f"Output folder: {self.output_directory}")
+        self.status.configure(text="Custom output folder selected.")
+
+    def _reset_output_folder(self):
+        self.output_directory = None
+        self.output_label.configure(text="Output folder: Same folder as each input file")
+        self.status.configure(text="Outputs will be saved beside the input files.")
+
+    def _output_path_for(self, source: Path, operation: str) -> Path:
+        default = (
+            default_compressed_path(source)
+            if operation == "compress"
+            else default_decompressed_path(source)
+        )
+        if self.output_directory is None:
+            return default
+        return self.output_directory / default.name
 
     def _verify_dialog(self):
         original = filedialog.askopenfilename(title="Choose original file")
